@@ -4,17 +4,16 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.data as data
 import torchvision
 import torchvision.transforms as transforms
 from torchsummary import summary
 from torch.autograd import Variable
 
-# class Downward(nn.Module):
-
-classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
+import barts2019loader
 
 class test_pytorch(nn.Module):
-    def __init__(self, in_channel = 4, filter = 16) -> None:
+    def __init__(self, in_channel = 4, filter = 16):
         super(test_pytorch, self).__init__()
         self.in_channel = in_channel
         self.filter = filter
@@ -149,12 +148,12 @@ class test_pytorch(nn.Module):
 
         return out
 
-transform = transforms.Compose(
-    [transforms.Resize((32,32)),
-     transforms.ToTensor(),
-     transforms.Normalize(0.5,0.5)])
-trainset = torchvision.datasets.MNIST(root='./minst', train=True, download=True, transform=transform)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=4, shuffle=False, num_workers=2)
+# transform = transforms.Compose(
+#     [transforms.Resize((32,32)),
+#      transforms.ToTensor(),
+#      transforms.Normalize(0.5,0.5)])
+# trainset = torchvision.datasets.MNIST(root='./minst', train=True, download=True, transform=transform)
+# trainloader = torch.utils.data.DataLoader(trainset, batch_size=4, shuffle=False, num_workers=2)
 
 # class Train:
 #     def __init__(self) -> None:
@@ -166,7 +165,44 @@ trainloader = torch.utils.data.DataLoader(trainset, batch_size=4, shuffle=False,
 # input = images.double().numpy()
 # unet_3d = test_pytorch(input, 8)
 # unet_3d.double()
-input = Variable(torch.randn(16, 4, 64, 64, 64))  # b,c,z,h,w
-m = test_pytorch(in_channel = 4, filter = 16)
-output = m(input)
-print(output.shape)
+
+# m = test_pytorch(in_channel = 4, filter = 16)
+# summary(m, input_size=(16,4,128,128,128), batch_size=4, device='cuda')
+
+
+def train(net, device, data_root, epochs=40, batch_size=4, lr=1e-5):
+    barts2019 = barts2019loader.dataset(data_root)
+    train_loader = data.DataLoader(dataset=barts2019, batch_size=batch_size, shuffle=True)
+    optimizer = torch.optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
+    criterion=nn.BCEWithLogitsLoss()
+    max_loss = float('inf')
+
+    for epoch in range(epochs):
+        print('EPOCH: {}' + format(epoch))
+        net.train()
+
+        for image, label in train_loader:
+            optimizer.zero_grad()
+            # image = image.to(device=device, dtype=torch.float32)
+            # label = label.to(device=device, dtype=torch.float32)
+
+            pred = net(image)
+
+            loss = criterion(pred,label)
+
+            print('Loss/train', loss.item())
+
+            if loss < max_loss:
+                max_loss = loss
+                loss.backward()
+                optimizer.step()
+
+if __name__ == "__main__": 
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    MAX_EPOCH = 10
+    data_root = './joey/examples/3d_unet/data'
+    batch_size=2
+
+    net = test_pytorch(in_channel = 4, filter = 16)
+    train(net, device, data_root, MAX_EPOCH, batch_size)

@@ -10,9 +10,9 @@ from torchsummary import summary
 # class Downward(nn.Module):
 
 
-class test_pytorch(nn.Module):
+class test_joey(nn.Module):
     def __init__(self, in_channel = None, filter = 8) -> None:
-        super(test_pytorch, self).__init__()
+        super(test_joey, self).__init__()
         self.in_channel = in_channel
         self.filter = filter
 
@@ -142,7 +142,7 @@ class test_pytorch(nn.Module):
         return out
 
 
-input = torch.rand(5,4)
+# input = torch.rand(5,4)
 
-m = test_pytorch(8)
-print(m)
+# m = test_joey(8)
+# print(m)
