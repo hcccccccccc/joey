@@ -23,8 +23,11 @@ def train(net, device, data_root, epochs=40, batch_size=4, lr=1e-5):
 
         for image, label in train_loader:
             optimizer.zero_grad()
-            image = image.to(device=device, dtype=torch.float32)
-            label = label.to(device=device, dtype=torch.float32)
+            image.reshape(1,0,2,3,4)
+            image = torch.Tensor(image)
+            label = torch.Tensor(label)
+            # image = image.to(device=device, dtype=torch.float32)
+            # label = label.to(device=device, dtype=torch.float32)
 
             pred = net(image)
 

@@ -11,6 +11,7 @@ from torchsummary import summary
 from torch.autograd import Variable
 
 import barts2019loader
+import diceloss
 
 class test_pytorch(nn.Module):
     def __init__(self, in_channel = 4, filter = 16):
@@ -170,39 +171,46 @@ class test_pytorch(nn.Module):
 # summary(m, input_size=(16,4,128,128,128), batch_size=4, device='cuda')
 
 
-def train(net, device, data_root, epochs=40, batch_size=4, lr=1e-5):
+def train(net, device, data_root, epochs=40, batch_size=4, lr=1e-2):
     barts2019 = barts2019loader.dataset(data_root)
     train_loader = data.DataLoader(dataset=barts2019, batch_size=batch_size, shuffle=True)
     optimizer = torch.optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
-    criterion=nn.BCEWithLogitsLoss()
+    criterion=diceloss.MultiDiceLoss()
     max_loss = float('inf')
 
     for epoch in range(epochs):
-        print('EPOCH: {}' + format(epoch))
+        train_loss = 0
+        train_acc = 0
+        # print('EPOCH: ' + format(epoch))
         net.train()
 
         for image, label in train_loader:
+            image = torch.stack(image, dim=1)
+            image = image.to(device=device, dtype=torch.float32)
+            label = label.to(device=device, dtype=torch.float32)
+
             optimizer.zero_grad()
-            # image = image.to(device=device, dtype=torch.float32)
-            # label = label.to(device=device, dtype=torch.float32)
+            label_pred = net(image)
 
-            pred = net(image)
-
-            loss = criterion(pred,label)
-
-            print('Loss/train', loss.item())
-
-            if loss < max_loss:
-                max_loss = loss
-                loss.backward()
-                optimizer.step()
+            loss = criterion(label_pred,label)
+            loss.backward()
+            train_loss += loss.item()
+            # pred = label_pred.argmax(dim=1)
+            # train_acc += (pred == label).sum()
+            optimizer.step()
+            # print('train loss : {:.6f}'.format(train_loss))
+        
+        print('Epoch: {} | train loss : {:.6f}'.format(epoch+1, (train_loss / len(train_loader))))
+    
 
 if __name__ == "__main__": 
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    MAX_EPOCH = 10
+    MAX_EPOCH = 20
     data_root = './joey/examples/3d_unet/data'
-    batch_size=2
+    batch_size= 1
 
     net = test_pytorch(in_channel = 4, filter = 16)
     train(net, device, data_root, MAX_EPOCH, batch_size)
+    # m = test_pytorch(in_channel = 4, filter = 16)
+    # summary(m, input_size=(16,4,128,128,128), batch_size=4, device='cuda')

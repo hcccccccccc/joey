@@ -41,17 +41,22 @@ class dataset(Dataset):
         img_t2 = sitk.GetArrayFromImage(f_t2)
         img_flair = sitk.GetArrayFromImage(f_flair)
         img_labels = sitk.GetArrayFromImage(f_labels)
-
+        img_t1 = np.resize(img_t1, (128,128,128))
+        img_t1ce = np.resize(img_t1ce, (128,128,128))
+        img_t2 = np.resize(img_t2, (128,128,128))
+        img_flair = np.resize(img_flair, (128,128,128))
+        img_labels = np.resize(img_labels, (128,128,128))
         return [img_t1, img_t1ce, img_t2, img_flair], img_labels
 
     def __len__(self):
         return len(self.list_path_data)
 
 
-# if __name__=='__main__':
-    # data_root = './joey/examples/3d_unet/data'
-    # BraTS2019 = dataset(data_root)
-    # train_loader = data.DataLoader(BraTS2019, batch_size=2, shuffle=True, num_workers=4,
-    #                                      pin_memory=False)
-    # for t1, t1ce, t2, flair, labels in train_loader:
-    #     print(t1.shape)
+if __name__=='__main__':
+    data_root = './joey/examples/3d_unet/data'
+    BraTS2019 = dataset(data_root)
+    train_loader = data.DataLoader(BraTS2019, batch_size=2, shuffle=True, num_workers=4,
+                                         pin_memory=False)
+    for img, labels in train_loader:
+        img = np.asarray(img)
+        print(img.shape)
