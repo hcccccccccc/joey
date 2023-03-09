@@ -149,31 +149,23 @@ class test_pytorch(nn.Module):
 
         return out
 
-# transform = transforms.Compose(
-#     [transforms.Resize((32,32)),
-#      transforms.ToTensor(),
-#      transforms.Normalize(0.5,0.5)])
-# trainset = torchvision.datasets.MNIST(root='./minst', train=True, download=True, transform=transform)
-# trainloader = torch.utils.data.DataLoader(trainset, batch_size=4, shuffle=False, num_workers=2)
+# def printloss(train_losses, valid_losses, train_loss, valid_loss):
+#     train_losses.append(train_loss)
+#     valid_losses.append(valid_loss)
 
-# class Train:
-#     def __init__(self) -> None:
-#         self.args = args
-#         self.model = model
+#     # Plot train and validation losses and save them to file
+#     plt.plot(train_losses, label='Train Loss')
+#     plt.plot(valid_losses, label='Valid Loss')
+#     plt.legend()
+#     plt.xlabel('Epoch')
+#     plt.ylabel('Loss')
+#     plt.savefig(f'loss_plot_epoch_{epoch}.png')
+#     plt.clf()
 
-# dataiter = iter(trainloader)
-# images, labels = next(dataiter)
-# input = images.double().numpy()
-# unet_3d = test_pytorch(input, 8)
-# unet_3d.double()
-
-# m = test_pytorch(in_channel = 4, filter = 16)
-# summary(m, input_size=(16,4,128,128,128), batch_size=4, device='cuda')
-
-
-def train(net, device, data_root, epochs=40, batch_size=4, lr=1e-2):
+def train(net, device, data_root, epochs=40, batch_size=4, lr=1e-5):
     barts2019 = barts2019loader.dataset(data_root)
-    train_loader = data.DataLoader(dataset=barts2019, batch_size=batch_size, shuffle=True)
+    # print(len(barts2019))
+    train_loader = data.DataLoader(dataset=barts2019, batch_size=batch_size, shuffle=True, num_workers=2)
     optimizer = torch.optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
     criterion=diceloss.MultiDiceLoss()
     max_loss = float('inf')
@@ -181,10 +173,12 @@ def train(net, device, data_root, epochs=40, batch_size=4, lr=1e-2):
     for epoch in range(epochs):
         train_loss = 0
         train_acc = 0
-        # print('EPOCH: ' + format(epoch))
+        print('EPOCH: {}'.format(epoch+1))
         net.train()
 
-        for image, label in train_loader:
+        for batch, (image, label) in enumerate(train_loader):
+            if batch % 5 == 0:
+                print('\rprocess {:.2%}'.format(batch/len(train_loader)), end='')
             image = torch.stack(image, dim=1)
             image = image.to(device=device, dtype=torch.float32)
             label = label.to(device=device, dtype=torch.float32)
@@ -200,15 +194,15 @@ def train(net, device, data_root, epochs=40, batch_size=4, lr=1e-2):
             optimizer.step()
             # print('train loss : {:.6f}'.format(train_loss))
         
-        print('Epoch: {} | train loss : {:.6f}'.format(epoch+1, (train_loss / len(train_loader))))
-    
+        print('Summary: Epoch {} | train loss {:.6f}'.format(epoch+1, (train_loss / len(train_loader))))
+
 
 if __name__ == "__main__": 
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    MAX_EPOCH = 20
+    MAX_EPOCH = 40
     data_root = './joey/examples/3d_unet/data'
-    batch_size= 1
+    batch_size= 2
 
     net = test_pytorch(in_channel = 4, filter = 16)
     train(net, device, data_root, MAX_EPOCH, batch_size)
