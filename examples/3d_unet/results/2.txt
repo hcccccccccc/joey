@@ -1,0 +1,120 @@
+EPOCH: 1
+process 92.11%Summary: Epoch 1 | train loss 0.727806
+EPOCH: 2
+process 92.11%Summary: Epoch 2 | train loss 0.718765
+EPOCH: 3
+process 92.11%Summary: Epoch 3 | train loss 0.716469
+EPOCH: 4
+process 92.11%Summary: Epoch 4 | train loss 0.715550
+EPOCH: 5
+process 92.11%Summary: Epoch 5 | train loss 0.714658
+EPOCH: 6
+process 92.11%Summary: Epoch 6 | train loss 0.713922
+EPOCH: 7
+process 92.11%Summary: Epoch 7 | train loss 0.713524
+EPOCH: 8
+process 92.11%Summary: Epoch 8 | train loss 0.712950
+EPOCH: 9
+process 92.11%Summary: Epoch 9 | train loss 0.712676
+EPOCH: 10
+process 92.11%Summary: Epoch 10 | train loss 0.712438
+EPOCH: 11
+process 92.11%Summary: Epoch 11 | train loss 0.711852
+EPOCH: 12
+process 92.11%Summary: Epoch 12 | train loss 0.711719
+EPOCH: 13
+process 92.11%Summary: Epoch 13 | train loss 0.711404
+EPOCH: 14
+process 92.11%Summary: Epoch 14 | train loss 0.711044
+EPOCH: 15
+process 92.11%Summary: Epoch 15 | train loss 0.710981
+EPOCH: 16
+process 92.11%Summary: Epoch 16 | train loss 0.710701
+EPOCH: 17
+process 92.11%Summary: Epoch 17 | train loss 0.710618
+EPOCH: 18
+process 92.11%Summary: Epoch 18 | train loss 0.710396
+EPOCH: 19
+process 92.11%Summary: Epoch 19 | train loss 0.710287
+EPOCH: 20
+process 92.11%Summary: Epoch 20 | train loss 0.709928
+EPOCH: 21
+process 92.11%Summary: Epoch 21 | train loss 0.709928
+EPOCH: 22
+process 92.11%Summary: Epoch 22 | train loss 0.709944
+EPOCH: 23
+process 92.11%Summary: Epoch 23 | train loss 0.709796
+EPOCH: 24
+process 92.11%Summary: Epoch 24 | train loss 0.709519
+EPOCH: 25
+process 92.11%Summary: Epoch 25 | train loss 0.709585
+EPOCH: 26
+process 92.11%Summary: Epoch 26 | train loss 0.709424
+EPOCH: 27
+process 92.11%Summary: Epoch 27 | train loss 0.709347
+EPOCH: 28
+process 92.11%Summary: Epoch 28 | train loss 0.709253
+EPOCH: 29
+process 92.11%Summary: Epoch 29 | train loss 0.709222
+EPOCH: 30
+process 92.11%Summary: Epoch 30 | train loss 0.709217
+EPOCH: 31
+process 92.11%Summary: Epoch 31 | train loss 0.709083
+EPOCH: 32
+process 92.11%Summary: Epoch 32 | train loss 0.709108
+EPOCH: 33
+process 92.11%Summary: Epoch 33 | train loss 0.708813
+EPOCH: 34
+process 92.11%Summary: Epoch 34 | train loss 0.708743
+EPOCH: 35
+process 92.11%Summary: Epoch 35 | train loss 0.709011
+EPOCH: 36
+process 92.11%Summary: Epoch 36 | train loss 0.708904
+EPOCH: 37
+process 92.11%Summary: Epoch 37 | train loss 0.708877
+EPOCH: 38
+process 92.11%Summary: Epoch 38 | train loss 0.708818
+EPOCH: 39
+process 92.11%Summary: Epoch 39 | train loss 0.708830
+EPOCH: 40
+process 92.11%Summary: Epoch 40 | train loss 0.708784
+EPOCH: 41
+process 92.11%Summary: Epoch 41 | train loss 0.708776
+EPOCH: 42
+process 92.11%Summary: Epoch 42 | train loss 0.708769
+EPOCH: 43
+process 92.11%Summary: Epoch 43 | train loss 0.708599
+EPOCH: 44
+process 92.11%Summary: Epoch 44 | train loss 0.708652
+EPOCH: 45
+process 92.11%Summary: Epoch 45 | train loss 0.708711
+EPOCH: 46
+process 92.11%Summary: Epoch 46 | train loss 0.708486
+EPOCH: 47
+process 92.11%Summary: Epoch 47 | train loss 0.708535
+EPOCH: 48
+process 92.11%Summary: Epoch 48 | train loss 0.708638
+EPOCH: 49
+process 92.11%Summary: Epoch 49 | train loss 0.708641
+EPOCH: 50
+process 92.11%Summary: Epoch 50 | train loss 0.708632
+EPOCH: 51
+process 92.11%Summary: Epoch 51 | train loss 0.708486
+EPOCH: 52
+process 92.11%Summary: Epoch 52 | train loss 0.708522
+EPOCH: 53
+process 92.11%Summary: Epoch 53 | train loss 0.708319
+EPOCH: 54
+process 92.11%Summary: Epoch 54 | train loss 0.708597
+EPOCH: 55
+process 92.11%Summary: Epoch 55 | train loss 0.708460
+EPOCH: 56
+process 92.11%Summary: Epoch 56 | train loss 0.708574
+EPOCH: 57
+process 92.11%Summary: Epoch 57 | train loss 0.708605
+EPOCH: 58
+process 92.11%Summary: Epoch 58 | train loss 0.708576
+EPOCH: 59
+process 92.11%Summary: Epoch 59 | train loss 0.708548
+EPOCH: 60
+process 92.11%Summary: Epoch 60 | train loss 0.708527

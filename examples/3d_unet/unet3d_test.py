@@ -7,9 +7,11 @@ import torch.nn.functional as F
 import torch.utils.data as data
 import torchvision
 import torchvision.transforms as transforms
+import torchvision.transforms.functional as TF
 from torchsummary import summary
 from torch.autograd import Variable
 
+import matplotlib.pyplot as plt
 import barts2019loader
 import diceloss
 
@@ -20,15 +22,15 @@ class test_pytorch(nn.Module):
         self.filter = filter
 
         # Downward block
-        self.DB1_CB = self.CB(in_channel=in_channel, filter=self.filter, stride=1, kernel_size=3)
+        self.DB1_CB = self.CB(in_channel=in_channel, filter=self.filter, stride=1, kernel_size=(3,3,3))
         self.DB1 = self.DB(in_channel=self.filter, filter=self.filter, stride=1)
-        self.DB2_CB = self.CB(in_channel=self.filter, filter=self.filter*2, stride=2, kernel_size=3)
+        self.DB2_CB = self.CB(in_channel=self.filter, filter=self.filter*2, stride=2, kernel_size=(3,3,3))
         self.DB2 = self.DB(in_channel=self.filter*2, filter=self.filter*2, stride=1)
-        self.DB3_CB = self.CB(in_channel=self.filter*2, filter=self.filter*4, stride=2, kernel_size=3)
+        self.DB3_CB = self.CB(in_channel=self.filter*2, filter=self.filter*4, stride=2, kernel_size=(3,3,3))
         self.DB3 = self.DB(in_channel=self.filter*4, filter=self.filter*4, stride=1)
-        self.DB4_CB = self.CB(in_channel=self.filter*4, filter=self.filter*8, stride=2, kernel_size=3)
+        self.DB4_CB = self.CB(in_channel=self.filter*4, filter=self.filter*8, stride=2, kernel_size=(3,3,3))
         self.DB4 = self.DB(in_channel=self.filter*8, filter=self.filter*8, stride=1)
-        self.DB5_CB = self.CB(in_channel=self.filter*8, filter=self.filter*16, stride=2, kernel_size=3)
+        self.DB5_CB = self.CB(in_channel=self.filter*8, filter=self.filter*16, stride=2, kernel_size=(3,3,3))
         self.DB5 = self.DB(in_channel=self.filter*16, filter=self.filter*16, stride=1)
 
 
@@ -49,13 +51,13 @@ class test_pytorch(nn.Module):
         self.U3_2 = self.U3()
         self.sigmoid = nn.Sigmoid()
 
-    def CB(self, in_channel, filter, stride=1, kernel_size=3,padding=1):
+    def CB(self, in_channel, filter, stride=1, kernel_size=(3,3,3),padding=1):
         return nn.Sequential(nn.Conv3d(in_channel, filter, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
                              nn.InstanceNorm3d(filter),
                              nn.LeakyReLU())
 
     def C3(self, in_channel,filter=3):
-        return nn.Conv3d(in_channel, filter, kernel_size=1, stride=1, padding=0, bias=False)
+        return nn.Conv3d(in_channel, filter, kernel_size=(1,1,1), stride=1, padding=0, bias=False)
     
     def DB(self, in_channel, filter, stride):
         return nn.Sequential(self.CB(in_channel, filter, stride),
@@ -73,7 +75,7 @@ class test_pytorch(nn.Module):
 
     def UB_CB_CB(self, in_channel, filter):
         return nn.Sequential(self.CB(in_channel, filter),
-                             self.CB(filter, filter, kernel_size=1,padding=0))
+                             self.CB(filter, filter, kernel_size=(1,1,1),padding=0))
 
     def forward(self, input):
 
@@ -162,46 +164,75 @@ class test_pytorch(nn.Module):
 #     plt.savefig(f'loss_plot_epoch_{epoch}.png')
 #     plt.clf()
 
-def train(net, device, data_root, epochs=40, batch_size=4, lr=1e-5):
-    barts2019 = barts2019loader.dataset(data_root)
+def train(net, device, data_root, epochs=40, batch_size=4, lr=5e-4):
+    barts2019 = barts2019loader.BratsDataset(data_root)
     # print(len(barts2019))
     train_loader = data.DataLoader(dataset=barts2019, batch_size=batch_size, shuffle=True, num_workers=2)
-    optimizer = torch.optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
-    criterion=diceloss.MultiDiceLoss()
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+    criterion=diceloss.WeightedMulticlassDiceLoss(num_classes=3, class_weights=[0.5,0.3,0.2])
     max_loss = float('inf')
+    total_loss = []
+    ET_loss = []
+    TC_loss = []
+    WT_loss = []
 
     for epoch in range(epochs):
         train_loss = 0
         train_acc = 0
+        tc_dice = 0
+        wt_dice = 0
+        et_dice = 0
         print('EPOCH: {}'.format(epoch+1))
         net.train()
 
         for batch, (image, label) in enumerate(train_loader):
-            if batch % 5 == 0:
-                print('\rprocess {:.2%}'.format(batch/len(train_loader)), end='')
+            print('\rprocess {:.2%}'.format(batch/len(train_loader)), end='')
             image = torch.stack(image, dim=1)
             image = image.to(device=device, dtype=torch.float32)
             label = label.to(device=device, dtype=torch.float32)
 
-            optimizer.zero_grad()
             label_pred = net(image)
 
-            loss = criterion(label_pred,label)
-            loss.backward()
+            pil_img = TF.to_pil_image(label[0][0][64].float())
+            pil_img.save("label.jpg", format="PNG")
+            pil_img = TF.to_pil_image(label_pred[0][0][64].float())
+            pil_img.save("label_pred.jpg", format="PNG")
+
+            loss, et, tc, wt = criterion(label_pred,label)
+            optimizer.zero_grad()
+            tc.backward()
             train_loss += loss.item()
+            tc_dice += tc.item()
+            wt_dice += wt.item()
+            et_dice += et.item()
+
             # pred = label_pred.argmax(dim=1)
             # train_acc += (pred == label).sum()
             optimizer.step()
             # print('train loss : {:.6f}'.format(train_loss))
         
-        print('Summary: Epoch {} | train loss {:.6f}'.format(epoch+1, (train_loss / len(train_loader))))
+        total_loss.append(train_loss/len(train_loader))
+        ET_loss.append(et_dice/len(train_loader))
+        TC_loss.append(tc_dice/len(train_loader))
+        WT_loss.append(wt_dice/len(train_loader))
+        print('\rSummary: Epoch {} | total loss {:.6f} || ET loss {:.6f} | TC loss {:.6f} | WT loss {:.6f}'.format(epoch+1, (train_loss / len(train_loader)), (et_dice / len(train_loader)), (tc_dice / len(train_loader)), (wt_dice / len(train_loader))), end='\n')
+
+        plt.clf()
+        plt.plot(range(0, epoch+1),total_loss, label='total loss')
+        plt.plot(range(0,epoch+1), ET_loss, label='ET loss')
+        plt.plot(range(0,epoch+1), TC_loss, label='TC loss')
+        plt.plot(range(0,epoch+1), WT_loss, label='WT loss')
+        plt.legend()
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.savefig('loss.png')
 
 
 if __name__ == "__main__": 
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    MAX_EPOCH = 40
-    data_root = './joey/examples/3d_unet/data'
+    MAX_EPOCH = 200
+    data_root = './datasets/LGG'
     batch_size= 2
 
     net = test_pytorch(in_channel = 4, filter = 16)
