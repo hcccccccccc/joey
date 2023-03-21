@@ -22,16 +22,16 @@ class test_pytorch(nn.Module):
         self.filter = filter
 
         # Downward block
-        self.DB1_CB = self.CB(in_channel=in_channel, filter=self.filter, stride=1, kernel_size=(3,3,3))
-        self.DB1 = self.DB(in_channel=self.filter, filter=self.filter, stride=1)
-        self.DB2_CB = self.CB(in_channel=self.filter, filter=self.filter*2, stride=2, kernel_size=(3,3,3))
-        self.DB2 = self.DB(in_channel=self.filter*2, filter=self.filter*2, stride=1)
-        self.DB3_CB = self.CB(in_channel=self.filter*2, filter=self.filter*4, stride=2, kernel_size=(3,3,3))
-        self.DB3 = self.DB(in_channel=self.filter*4, filter=self.filter*4, stride=1)
-        self.DB4_CB = self.CB(in_channel=self.filter*4, filter=self.filter*8, stride=2, kernel_size=(3,3,3))
-        self.DB4 = self.DB(in_channel=self.filter*8, filter=self.filter*8, stride=1)
-        self.DB5_CB = self.CB(in_channel=self.filter*8, filter=self.filter*16, stride=2, kernel_size=(3,3,3))
-        self.DB5 = self.DB(in_channel=self.filter*16, filter=self.filter*16, stride=1)
+        self.DB1_CB = self.CB(in_channel=in_channel, filter=self.filter, stride=(1,1,1),kernel_size=(3,3,3))
+        self.DB1 = self.DB(in_channel=self.filter, filter=self.filter)
+        self.DB2_CB = self.CB(in_channel=self.filter, filter=self.filter*2, stride=(2,2,2), kernel_size=(3,3,3))
+        self.DB2 = self.DB(in_channel=self.filter*2, filter=self.filter*2)
+        self.DB3_CB = self.CB(in_channel=self.filter*2, filter=self.filter*4, stride=(2,2,2), kernel_size=(3,3,3))
+        self.DB3 = self.DB(in_channel=self.filter*4, filter=self.filter*4)
+        self.DB4_CB = self.CB(in_channel=self.filter*4, filter=self.filter*8, stride=(2,2,2), kernel_size=(3,3,3))
+        self.DB4 = self.DB(in_channel=self.filter*8, filter=self.filter*8)
+        self.DB5_CB = self.CB(in_channel=self.filter*8, filter=self.filter*16, stride=(2,2,2), kernel_size=(3,3,3))
+        self.DB5 = self.DB(in_channel=self.filter*16, filter=self.filter*16)
 
 
 
@@ -44,22 +44,22 @@ class test_pytorch(nn.Module):
         self.UB3_CB_CB = self.UB_CB_CB(self.filter*4, self.filter*2)
         self.UB4_U3_CB = self.UB_U3_CB(self.filter*2, self.filter)
         self.UB4_CB_CB = self.UB_CB_CB(self.filter*2, self.filter)
-        self.C3_1 = self.C3(self.filter*4)
-        self.C3_2 = self.C3(self.filter*2)
-        self.C3_3 = self.C3(self.filter)
+        self.C3_1 = self.C3(in_channel=self.filter*4)
+        self.C3_2 = self.C3(in_channel=self.filter*2)
+        self.C3_3 = self.C3(in_channel=self.filter)
         self.U3_1 = self.U3()
         self.U3_2 = self.U3()
         self.sigmoid = nn.Sigmoid()
 
-    def CB(self, in_channel, filter, stride=1, kernel_size=(3,3,3),padding=1):
+    def CB(self, in_channel, filter, stride=(1,1,1), kernel_size=(3,3,3),padding=1):
         return nn.Sequential(nn.Conv3d(in_channel, filter, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
                              nn.InstanceNorm3d(filter),
                              nn.LeakyReLU())
 
     def C3(self, in_channel,filter=3):
-        return nn.Conv3d(in_channel, filter, kernel_size=(1,1,1), stride=1, padding=0, bias=False)
+        return nn.Conv3d(in_channel, filter, kernel_size=(1,1,1), stride=(1,1,1), padding=0, bias=False)
     
-    def DB(self, in_channel, filter, stride):
+    def DB(self, in_channel, filter, stride=(1,1,1)):
         return nn.Sequential(self.CB(in_channel, filter, stride),
                              nn.Dropout3d(),
                              self.CB(filter, filter))
@@ -194,17 +194,17 @@ def train(net, device, data_root, epochs=40, batch_size=4, lr=5e-4):
             label_pred = net(image)
 
             pil_img = TF.to_pil_image(label[0][0][64].float())
-            pil_img.save("label.jpg", format="PNG")
+            pil_img.save("label.png", format="PNG")
             pil_img = TF.to_pil_image(label_pred[0][0][64].float())
-            pil_img.save("label_pred.jpg", format="PNG")
+            pil_img.save("label_pred.png", format="PNG")
 
             loss, et, tc, wt = criterion(label_pred,label)
             optimizer.zero_grad()
-            tc.backward()
+            loss.backward()
             train_loss += loss.item()
+            et_dice += et.item()
             tc_dice += tc.item()
             wt_dice += wt.item()
-            et_dice += et.item()
 
             # pred = label_pred.argmax(dim=1)
             # train_acc += (pred == label).sum()
@@ -232,10 +232,10 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     MAX_EPOCH = 200
-    data_root = './datasets/LGG'
+    data_root = './datasets/data'
     batch_size= 2
-
+    lr = 5e-4
     net = test_pytorch(in_channel = 4, filter = 16)
-    train(net, device, data_root, MAX_EPOCH, batch_size)
+    train(net, device, data_root, MAX_EPOCH, batch_size, lr)
     # m = test_pytorch(in_channel = 4, filter = 16)
     # summary(m, input_size=(16,4,128,128,128), batch_size=4, device='cuda')

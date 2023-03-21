@@ -156,9 +156,9 @@ class BratsTransform:
         return torch.tensor(seg_one_hot)
 
 if __name__=='__main__':
-    data_root = './datasets/LGG'
+    data_root = './datasets/data'
     BraTS2019 = BratsDataset(data_root)
-    train_loader = data.DataLoader(BraTS2019, batch_size=2, shuffle=True, num_workers=4,
+    train_loader = data.DataLoader(BraTS2019, batch_size=2, shuffle=False, num_workers=4,
                                          pin_memory=False)
     for image, label in train_loader:
         img = np.asarray(image)

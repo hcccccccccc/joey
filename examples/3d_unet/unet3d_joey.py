@@ -7,20 +7,74 @@ import torch.nn.functional as F
 import joey
 from torchsummary import summary
 
-def CB(input_size, kernel_size, stride=1, padding=1):
-    conv = joey.Conv3D(kernel_size=kernel_size, input_size=input_size, stride=stride, padding=padding, activation=joey.activation.LeakyReLU())
-    inst = joey.InstanceNorm3D(input_size=input_size,generate_code=True)
+def CB(input_size, kernel_size, stride=(1,1,1), padding=1):
+    conv = joey.Conv3D(kernel_size=kernel_size, input_size=input_size, stride=stride, padding=padding, activation=joey.activation.LeakyReLU(),strict_stride_check=False)
+    # inst = joey.InstanceNorm3D(input_size=input_size,generate_code=True)
     # lrelu = joey.activation.LeakyReLU()
 
-    CB = [conv, inst]
-    return (joey.Net(CB), CB)
+    CB = [conv]
+    return CB
 
-def DB(in_channel, filter, stride):
-    CB1 = CB(in_channel, filter, stride),
+def C3(input_size, kernel_size=(3,1,1,1)):
+    conv = joey.Conv3D(kernel_size=kernel_size, input_size=input_size, stride=(1,1,1), padding=0)
+    return [conv]
+
+def DB(input_size, kernel_size):
+    CB1 = CB(input_size, kernel_size)
     # nn.Dropout3d(),
-    CB2 = CB(filter, filter)
-    DB = [CB1, CB2]
-    return (joey.Net(DB), DB)
+    CB2 = CB(input_size=input_size, kernel_size=kernel_size)
+    DB = CB1 + CB2
+    return DB
+
+def UB_U3_CB(input_size, kernel_size):
+    U3 = joey.UpSample(input_size= (input_size[0], input_size[1], input_size[2]*2, input_size[3]*2, input_size[4]*2),scale_factor=2)
+    CB1 = CB(input_size, kernel_size)
+
+    return [U3] + CB1
+    
+
+def UB_CB_CB(input_size, kernel_size):
+    CB1 = CB(input_size, kernel_size)
+    CB2 = CB(input_size, kernel_size,padding=0)
+    return CB1 + CB2
+
+def unet_joey(batch_size, in_channel, depth, height, weight, filter):
+
+
+        # Downward block
+    DB1_CB = CB(input_size=(batch_size, in_channel, depth, height, weight), kernel_size=(filter,3,3,3))
+    DB1 = DB(input_size=(batch_size, filter, depth, height, weight), kernel_size=(filter,3,3,3))
+    DB2_CB = CB(input_size=(batch_size, filter, depth, height, weight), kernel_size=(filter*2,3,3,3), stride=(2,2,2))
+    DB2 = DB(input_size=(batch_size, filter*2, depth/2, height/2, weight/2), kernel_size=(filter*2,3,3,3))
+    DB3_CB = CB(input_size=(batch_size, filter*2, depth/2, height/2, weight/2), kernel_size=(filter*4,3,3,3), stride=(2,2,2))
+    DB3 = DB(input_size=(batch_size, filter*4, depth/4, height/4, weight/4), kernel_size=(filter*4,3,3,3))
+    DB4_CB = CB(input_size=(batch_size, filter*4, depth/4, height/4, weight/4), kernel_size=(filter*8,3,3,3), stride=(2,2,2))
+    DB4 = DB(input_size=(batch_size, filter*8, depth/8, height/8, weight/8), kernel_size=(filter*8,3,3,3))
+    DB5_CB = CB(input_size=(batch_size, filter*8, depth/8, height/8, weight/8), kernel_size=(filter*16,3,3,3), stride=(2,2,2))
+    DB5 = DB(input_size=(batch_size, filter*16, depth/16, height/16, weight/16), kernel_size=(filter*16,3,3,3))
+
+    DB_part = DB1_CB + DB1 +DB2_CB + DB2 + DB3_CB + DB3 + DB4_CB + DB4 + DB5_CB + DB5
+
+        # Upward Block
+    UB1_U3_CB = UB_U3_CB(input_size=(batch_size, filter*16, depth/8, height/8, weight/8), kernel_size=(filter*8,3,3,3))
+    UB1_CB_CB = UB_CB_CB(input_size=(batch_size, filter*16, depth/8, height/8, weight/8), kernel_size=(filter*8,1,1,1))
+    UB2_U3_CB = UB_U3_CB(input_size=(batch_size, filter*8, depth/4, height/4, weight/4), kernel_size=(filter*4,3,3,3))
+    UB2_CB_CB = UB_CB_CB(input_size=(batch_size, filter*8, depth/4, height/4, weight/4), kernel_size=(filter*4,1,1,1))
+    UB3_U3_CB = UB_U3_CB(input_size=(batch_size, filter*4, depth/2, height/2, weight/2), kernel_size=(filter*2,3,3,3))
+    UB3_CB_CB = UB_CB_CB(input_size=(batch_size, filter*4, depth/2, height/2, weight/2), kernel_size=(filter*2,3,3,3))
+    UB4_U3_CB = UB_U3_CB(input_size=(batch_size, filter*2, depth, height, weight), kernel_size=(filter,3,3,3))
+    UB4_CB_CB = UB_CB_CB(input_size=(batch_size, filter*2, depth, height, weight), kernel_size=(filter,3,3,3))
+    C3_1 = C3(input_size=(batch_size, filter*4, depth/4, height/4, weight/4), kernel_size=(3,1,1,1))
+    C3_2 = C3(input_size=(batch_size, filter*2, depth/2, height/2, weight/2), kernel_size=(3,1,1,1))
+    C3_3 = C3(input_size=(batch_size, filter, depth, height, weight),kernel_size=(3,1,1,1))
+    U3_1 = joey.UpSample(input_size=(batch_size, 3, depth/4, height/4, weight/4), scale_factor=2)
+    U3_2 = joey.UpSample(input_size=(batch_size, 3, depth/2, height/2, weight/2),scale_factor=2)
+    # sigmoid = nn.Sigmoid()
+    UB_part = UB1_U3_CB + UB1_CB_CB + UB2_U3_CB + UB2_CB_CB + UB3_U3_CB + UB3_CB_CB + UB4_U3_CB + UB4_CB_CB + C3_1 + C3_2 + C3_3 + [U3_1] + [U3_2]
+    unet = DB_part + UB_part
+
+    return(joey.Net(unet), unet)
+
 
 def create_unet3d(batch_size=2, filter=8):
     # DB1_CB = CB(input_size, kernel_size)
@@ -172,17 +226,18 @@ def create_unet3d(batch_size=2, filter=8):
     #     U3_2 = U3()
 
 
-size = (1,2,30,30,30)
-net = joey.InstanceNorm3D(input_size=(size),generate_code=True)
+size = (1,2,3,4,5)
+# net = DB(input_size=(size),kernel_size=(3,3,3,3),stride=1)
+net2 = unet_joey(1,4,32,32,32,4)
 a = torch.rand(size)
 input_numpy = a.detach().numpy()
-m = joey.InstanceNorm3D(input_size=(size),generate_code=True)
+# m = joey.InstanceNorm3D(input_size=(size),generate_code=True)
+# out1 = m.execute(input_numpy)
 inst = nn.InstanceNorm3d(2)
-out1 = m.execute(input_numpy)
 out2 = inst(a)
+print(net2)
 # out = net(a)
-# print(net)
-# print(a)
+# print(out)
 
 # a = [1,2],[3,4],[5,6]
 # from itertools import product

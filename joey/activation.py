@@ -60,7 +60,7 @@ class LeakyReLU(Activation):
     def backprop_eqs(self, layer):
         dims = layer.result_gradients.dimensions
         return [Eq(layer.result_gradients[dims],
-                   layer.result_geadients[dims]
+                   layer.result_gradients[dims]
                    * (Max(0, sign(layer.result[dims])
                       + Min(0, sign(layer.result[dims]
                                     * self.negative_slope)))))]

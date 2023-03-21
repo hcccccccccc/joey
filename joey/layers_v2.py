@@ -1028,11 +1028,19 @@ class InstanceNorm(Layer):
             input_size[1],), dimensions=bias_dimensions, space_order=0,
             dtype=np.float64)
 
-        # kernel_dimensions = [SpaceDimension("kernel_-"+x)for x in ['d']]
+        # function for kernel
+        kernel_dims = [SpaceDimension("kernel_"+x)
+                       for x in dimensions]
 
-        # kernel_grad = Function(name="kernelgrad_%s" % name_allocator_func(
-        # ), shape=kernel)
-
+        kernel_func = Function(name=("Kernel_F"), shape=(kernel_size),
+                               dimensions=(kernel_dims), space_order=0,
+                               dtype=np.float64)
+        
+        kernel_grad_dimensions = [SpaceDimension(("kernel_grad"+x))
+                                  for x in dimensions]
+        kernel_grad = Function(name=("kgrad_"), shape=(
+            kernel_size), dimensions=kernel_grad_dimensions, space_order=0,
+            dtype=np.float64) 
         output_grad_dimensions = [SpaceDimension(
             "output_grad"+x) for x in dimensions]
 
@@ -1046,7 +1054,7 @@ class InstanceNorm(Layer):
             input_size[1],), dimensions=bias_grad_dimensions, space_order=0,
             dtype=np.float64)
 
-        return (None, input_func, result_func, bias, None,
+        return (kernel_func, input_func, result_func, bias, kernel_grad,
                 output_grad, bias_grad)
 
     def execute(self, input_data) -> np.array:
@@ -1069,7 +1077,8 @@ class InstanceNorm(Layer):
 
         # indices of kernel matrix for convolution
         k_indices = product(* k_dims_offsets)
-
+        # for i in k_indices:
+        #     print(i)
         temp_func = Function(name="Ones_Filter", shape=result_shape,
                              dimensions=result_dimensions, space_order=0,
                              dtype=np.float64)
@@ -1081,15 +1090,15 @@ class InstanceNorm(Layer):
         temp_func.data[:] = 1
         weight_matrix = sp.Matrix(
             [temp_func[(*result_dimensions[:2], *x)] for x in k_indices])
-        print("weight_matrix")
-        for i in weight_matrix:
-            print(i)
-
+        # print("weight_matrix")
+        # for i in weight_matrix:
+        #     print(i)
+        s = dv.types.Symbol(name='sum', dtype=dtype)dv.Operator([dv.Eq(s, 0.0)], [dv.Inc(s, f[:3])])
         r_indices_matrix = sp.Matrix(
             [self._I[(*result_dimensions[:2], *x)] for x in r_indicies])
         N = np.prod(result_shape[2:])
-        print("r_indices_matrix")
-        print(r_indices_matrix)
+        # print("r_indices_matrix")
+        # print(r_indices_matrix)
         # stencil operation corresponding to the convolution with kernel of input_shape with value to simulate sum of input_mat
         sum_input_sten = weight_matrix.dot(r_indices_matrix)
 
