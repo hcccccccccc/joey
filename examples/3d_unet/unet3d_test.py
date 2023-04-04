@@ -8,8 +8,8 @@ import torch.utils.data as data
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
-from torchsummary import summary
 from torch.autograd import Variable
+from sklearn.model_selection import train_test_split
 
 import matplotlib.pyplot as plt
 import barts2019loader
@@ -151,26 +151,16 @@ class test_pytorch(nn.Module):
 
         return out
 
-# def printloss(train_losses, valid_losses, train_loss, valid_loss):
-#     train_losses.append(train_loss)
-#     valid_losses.append(valid_loss)
-
-#     # Plot train and validation losses and save them to file
-#     plt.plot(train_losses, label='Train Loss')
-#     plt.plot(valid_losses, label='Valid Loss')
-#     plt.legend()
-#     plt.xlabel('Epoch')
-#     plt.ylabel('Loss')
-#     plt.savefig(f'loss_plot_epoch_{epoch}.png')
-#     plt.clf()
-
 def train(net, device, data_root, epochs=40, batch_size=4, lr=5e-4):
     barts2019 = barts2019loader.BratsDataset(data_root)
     # print(len(barts2019))
-    train_loader = data.DataLoader(dataset=barts2019, batch_size=batch_size, shuffle=True, num_workers=2)
+    train_idx, val_idx = train_test_split(list(range(len(barts2019))), test_size=0.2, random_state=42)
+    train_dataset = data.Subset(barts2019, train_idx)
+    val_dataset = data.Subset(barts2019, val_idx)
+    train_loader = data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+    val_loader = data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     criterion=diceloss.WeightedMulticlassDiceLoss(num_classes=3, class_weights=[0.5,0.3,0.2])
-    max_loss = float('inf')
     total_loss = []
     ET_loss = []
     TC_loss = []
@@ -229,13 +219,20 @@ def train(net, device, data_root, epochs=40, batch_size=4, lr=5e-4):
 
 
 if __name__ == "__main__": 
+    torch.cuda.empty_cache()
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # print(torch.cuda.device_count())
+    # print(torch.cuda.get_device_name(0))
+    # print(device)
+    # print(torch.cuda.is_available())
     MAX_EPOCH = 200
-    data_root = './datasets/data'
+    data_root = '/run/datasets/MICCAI_BraTS_2019_Data_Training'
     batch_size= 2
     lr = 5e-4
     net = test_pytorch(in_channel = 4, filter = 16)
+    if torch.cuda.is_available():
+        net.cuda()
     train(net, device, data_root, MAX_EPOCH, batch_size, lr)
     # m = test_pytorch(in_channel = 4, filter = 16)
     # summary(m, input_size=(16,4,128,128,128), batch_size=4, device='cuda')

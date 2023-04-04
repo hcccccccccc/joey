@@ -1,74 +1,124 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
+from apex import amp
+import time
 
 import matplotlib.pyplot as plt
 import barts2019loader
 import diceloss
 import unet3d_test
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
 
 class Trainer:
-    def __init__(self, model, train_dataset, criterion, batch_size, lr, num_epochs):
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = model.to(self.device)
-        self.train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        self.criterion = criterion
+    def __init__(self, model, train_dataset, val_dataset, batch_size, num_epochs, optimizer, criterion):
+        self.model = model
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
+        self.batch_size = batch_size
         self.num_epochs = num_epochs
+        self.optimizer = optimizer
+        self.criterion = criterion
+        
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
         
     def train(self):
-        total_loss = []
-        ET_loss = []
-        TC_loss = []
-        WT_loss = []
-        for epoch in range(self.num_epochs):
-            train_loss = 0
-            train_acc = 0
-            tc_dice = 0
-            wt_dice = 0
-            et_dice = 0
-            print('EPOCH: {}'.format(epoch+1))
-            self.model.train()
-            train_loss = 0
-            train_correct = 0
-            for data, target in self.train_loader:
-                data, target = data.to(self.device), target.to(self.device)
-                self.optimizer.zero_grad()
-                output = self.model(data)
-                loss = self.criterion(output, target)
-                train_loss += loss.item() * data.size(0)
-                pred = output.argmax(dim=1, keepdim=True)
-                train_correct += pred.eq(target.view_as(pred)).sum().item()
-                loss.backward()
-                self.optimizer.step()
-            train_loss /= len(self.train_loader.dataset)
-            train_accuracy = train_correct / len(self.train_loader.dataset)
-            
-            self.model.eval()
-            val_loss = 0
-            val_correct = 0
-            with torch.no_grad():
-                for data, target in self.val_loader:
-                    data, target = data.to(self.device), target.to(self.device)
-                    output = self.model(data)
-                    loss = self.criterion(output, target)
-                    val_loss += loss.item() * data.size(0)
-                    pred = output.argmax(dim=1, keepdim=True)
-                    val_correct += pred.eq(target.view_as(pred)).sum().item()
-            val_loss /= len(self.val_loader.dataset)
-            val_accuracy = val_correct / len(self.val_loader.dataset)
-            
-            print('Epoch [{}/{}], Train Loss: {:.4f}, Train Accuracy: {:.4f}, Val Loss: {:.4f}, Val Accuracy: {:.4f}'
-                  .format(epoch+1, self.num_epochs, train_loss, train_accuracy, val_loss, val_accuracy))
+        # print("memory used: {}".format(torch.cuda.memory_allocated(0)))
+        train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=2)
+        val_loader = DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=2)
+        total_train_loss = []
+        total_val_loss = []
+        total_val_acc = []
+        total_time = 0
+        self.model, self.optimizer = amp.initialize(self.model, self.optimizer, opt_level="O1")
 
+        for epoch in range(self.num_epochs):
+            start = time.time()
+            print("EPOCH: {}".format(epoch+1))
+            self.model.train()
+            train_loss = 0.0
+
+            for batch, (inputs, targets) in enumerate(train_loader):
+                print('\rprocess {:.2%}'.format(batch/len(train_loader)), end='')
+                inputs = torch.stack(inputs, dim=1)
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                self.optimizer.zero_grad()
+                outputs = self.model(inputs)
+                loss, et, tc, wt = self.criterion(outputs, targets)
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+                # loss[0].backward()
+                self.optimizer.step()
+                train_loss += loss.item() * inputs.size(0)
+
+                del inputs, targets, outputs, loss
+                torch.cuda.empty_cache()
+            
+            train_loss /= len(self.train_dataset)
+            val_loss, val_acc = self.validate(val_loader)
+
+
+            time_finished = time.time() - start
+            print(f'Epoch: {epoch+1}/{self.num_epochs}, Training Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_acc:.4f}')
+            print("Time spend: {:.0f}m {:.0f}s".format(time_finished // 60, time_finished % 60))
+            total_time += time_finished
+            total_train_loss.append(train_loss)
+            total_val_loss.append(val_loss)
+            total_val_acc.append(val_acc)
+            plt.clf()
+            plt.plot(range(0, epoch+1),total_train_loss, label='train loss')
+            plt.plot(range(0, epoch+1),total_val_loss, label='val loss')
+            # plt.plot(range(0, epoch+1),total_val_acc, label='val acc')
+            # plt.plot(range(0,epoch+1), ET_loss, label='ET loss')
+            # plt.plot(range(0,epoch+1), TC_loss, label='TC loss')
+            # plt.plot(range(0,epoch+1), WT_loss, label='WT loss')
+            plt.legend()
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.savefig('loss.png')
+
+        print("Total time: {:.0f}m {:.0f}s | Average time cost: {:.0f}m {:.0f}s".format(total_time // 60, total_time % 60, (total_time // self.num_epochs) // 60, (total_time // self.num_epochs )% 60))
+
+    def validate(self, val_loader):
+        self.model.eval()
+        val_loss = 0.0
+        val_acc = 0.0
+        
+        with torch.no_grad():
+            for inputs, targets in val_loader:
+                inputs = torch.stack(inputs, dim=1)
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                outputs = self.model(inputs)
+                loss = self.criterion(outputs, targets)
+                val_loss += loss[0].item() * inputs.size(0)
+                # preds = torch.argmax(outputs, axis=1)
+                # val_acc += accuracy_score(targets.flatten().cpu().numpy(), outputs.flatten().cpu().numpy()) * inputs.size(0)
+                
+        val_loss /= len(self.val_dataset)
+        # val_acc /= len(self.val_dataset)
+        
+        return val_loss, val_acc
 
 if __name__ == "__main__": 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    MAX_EPOCH = 200
-    data_root = './datasets/HGG'
-    batch_size= 2
+    num_epochs = 100
+    data_root = '/run/datasets/MICCAI_BraTS_2019_Data_Training' 
+    batch_size= 1
+
+    # dataset, dataloader
     barts2019 = barts2019loader.BratsDataset(data_root)
-    criterion=diceloss.WeightedMulticlassDiceLoss(num_classes=3, class_weights=[0.5,0.3,0.2])
+    train_idx, val_idx = train_test_split(list(range(len(barts2019))), test_size=0.2, random_state=42)
+    train_dataset = Subset(barts2019, train_idx)
+    val_dataset = Subset(barts2019, val_idx)
+
+    # model
     net = unet3d_test.test_pytorch(in_channel = 4, filter = 16)
-    trainer = Trainer(net, barts2019, criterion, batch_size, lr=5e-4, num_epochs=MAX_EPOCH)
+    criterion=diceloss.WeightedMulticlassDiceLoss(num_classes=3, class_weights=[0.5,0.3,0.2])
+    optimizer=torch.optim.Adam(net.parameters(), lr=5e-4)
+
+    #train
+    trainer = Trainer(net, train_dataset, val_dataset, batch_size, num_epochs, optimizer, criterion)
+    trainer.train()

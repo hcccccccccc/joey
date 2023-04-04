@@ -81,7 +81,7 @@ class WeightedMulticlassDiceLoss(nn.Module):
             class_weights = torch.tensor(self.class_weights).to(target.device)
 
         # calculate soft probabilities
-        input_soft = F.softmax(input, dim=1)
+        # input = F.softmax(input, dim=1)
 
         # calculate one-hot target
         target_one_hot = target.float()
@@ -106,9 +106,9 @@ class WeightedMulticlassDiceLoss(nn.Module):
         tc_mask = target_one_hot[:, 1, :, :, :] + et_mask
         wt_mask = target_one_hot[:, 2, :, :, :] + tc_mask
 
-        et_pred = input_soft[:, 0, :, :, :]
-        tc_pred = input_soft[:, 1, :, :, :] + et_pred
-        wt_pred = input_soft[:, 2, :, :, :] + tc_pred
+        et_pred = input[:, 0, :, :, :]
+        tc_pred = input[:, 1, :, :, :] + et_pred
+        wt_pred = input[:, 2, :, :, :] + tc_pred
 
         et_dice = self.dice_loss(et_pred, et_mask)
         tc_dice = self.dice_loss(tc_pred, tc_mask)

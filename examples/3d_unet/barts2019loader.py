@@ -3,13 +3,9 @@ from torch.utils.data import Dataset
 from torch.utils import data
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
-import matplotlib.image as plt
-import nibabel as nib
 import numpy as np
-import itk
 import os
 import glob
-from PIL import Image
 import SimpleITK as sitk
 
 
@@ -22,12 +18,12 @@ class dataset(Dataset):
             transforms.Resize((128,128)),
             transforms.ToTensor(),
         ])
-        self.root = glob.glob(os.path.join(self.data_root, '*/*t1.nii'))
-        self.t1 = sorted(glob.glob(os.path.join(self.data_root, '*/*_t1.nii')))
-        self.t2 = sorted(glob.glob(os.path.join(self.data_root, '*/*_t1ce.nii')))
-        self.t1ce = sorted(glob.glob(os.path.join(self.data_root, '*/*_t2.nii')))
-        self.flair = sorted(glob.glob(os.path.join(self.data_root, '*/*_flair.nii')))
-        self.labels = sorted(glob.glob(os.path.join(self.data_root, '*/*_seg.nii')))
+        self.root = glob.glob(os.path.join(self.data_root, '*t1.nii'))
+        self.t1 = sorted(glob.glob(os.path.join(self.data_root, '*_t1.nii')))
+        self.t2 = sorted(glob.glob(os.path.join(self.data_root, '*_t1ce.nii')))
+        self.t1ce = sorted(glob.glob(os.path.join(self.data_root, '*_t2.nii')))
+        self.flair = sorted(glob.glob(os.path.join(self.data_root, '*_flair.nii')))
+        self.labels = sorted(glob.glob(os.path.join(self.data_root, '*_seg.nii')))
 
     def __getitem__(self, index):
         f_t1 = self.resize(self.t1[index], (128,128,128))
@@ -76,6 +72,9 @@ class BratsDataset(Dataset):
 
     def __getitem__(self, idx):
         subject_dir = os.path.join(self.data_dir, self.subjects[idx])
+        # print(subject_dir)
+        # file = os.listdir(subject_dir)
+        # print(len(file))
         f_t1 = glob.glob(os.path.join(subject_dir, '*_t1.nii'))
         f_t1ce = glob.glob(os.path.join(subject_dir, '*_t1ce.nii'))
         f_t2 = glob.glob(os.path.join(subject_dir, '*_t2.nii'))
@@ -108,8 +107,8 @@ class BratsDataset(Dataset):
         image = torch.from_numpy(image).float()
         # label = torch.from_numpy(label).float()
 
-        return [image[0][0], image[1][0], image[2][0], image[3][0]], label
         # return image, label
+        return [image[0][0], image[1][0], image[2][0], image[3][0]], label
 
 
 class BratsTransform:
@@ -156,12 +155,9 @@ class BratsTransform:
         return torch.tensor(seg_one_hot)
 
 if __name__=='__main__':
-    data_root = './datasets/data'
+    data_root = '/run/datasets/MICCAI_BraTS_2019_Data_Training'
     BraTS2019 = BratsDataset(data_root)
-    train_loader = data.DataLoader(BraTS2019, batch_size=2, shuffle=False, num_workers=4,
-                                         pin_memory=False)
+    train_loader = data.DataLoader(BraTS2019, batch_size=4, shuffle=False, num_workers=4)
     for image, label in train_loader:
-        img = np.asarray(image)
         pil_img = TF.to_pil_image(label[0][1][64].float())
         pil_img.save("my_image.jpg", format="JPEG")
-        print(img.shape)

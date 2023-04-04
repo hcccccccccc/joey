@@ -57,6 +57,7 @@ class Net:
 
     def _init_parameters(self):
         for layer in self._layers:
+
             if layer.kernel is not None:
                 layer.kernel.data[:] = \
                     np.random.rand(*layer.kernel.shape) - 0.5
@@ -196,6 +197,7 @@ class Net:
 
             The default value is None.
         """
+
         self._layers[-1].result_gradients.data[:] = \
             np.transpose(np.array(loss_gradient_func(self._layers[-1],
                                                      expected)))

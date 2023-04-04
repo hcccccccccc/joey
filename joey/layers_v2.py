@@ -222,6 +222,7 @@ class ConvV2(Layer):
             input_dims.append(
                 result_dimensions[-self._ndims + i]*self._stride[i] +
                 kernel_dims[-self._ndims + i])
+
         eqs += [Inc(self._R[result_dimensions],
                     self._K[(result_dimensions[1],
                              *kernel_dims[1:])]*self._I[input_dims])]
@@ -847,9 +848,13 @@ class UpSample(Layer):
         result_func = Function(name="Result_F", shape=result_shape,
                                dimensions=result_dimensions, space_order=0,
                                dtype=np.float64)
-
+        
+        result_grad = Function(name="Result_G",
+                               shape=result_shape,
+                               dimensions=result_dimensions,
+                               space_order=0, dtype=np.float64)
         return (None, input_func, result_func, None, None,
-                None, None)
+                result_grad, None)
 
     def execute(self, input_data) -> np.array:
 
@@ -876,62 +881,15 @@ class UpSample(Layer):
         return (eqs, args)
 
     def backprop_equations(self, prev_layer, next_layer):
-        layer = self
+        # if next_layer is None:
+        #     return ([], [])
 
-        kernel_dims = layer.kernel_gradients.dimensions
-        bias_dims = layer.bias_gradients.dimensions
-        dims = layer.result_gradients.dimensions
-
-        eqs = [Inc(layer.bias_gradients[bias_dims[0]],
-                   layer.result_gradients[dims[0], dims[1], dims[2], dims[3]]),
-               Inc(layer.kernel_gradients[kernel_dims[0], kernel_dims[1],
-                                          kernel_dims[2], kernel_dims[3]],
-                   layer.result_gradients[dims[0],
-                                          kernel_dims[0], dims[2],
-                                          dims[3]] *
-                   layer.input[dims[0], kernel_dims[1],
-                               kernel_dims[2] + dims[2],
-                               kernel_dims[3] + dims[3]])]
-
-        _, _, height, width = layer.kernel.shape
+        dims = self._R.dimensions
 
         if next_layer is not None:
-            next_dims = next_layer.result_gradients.dimensions
-            # TODO: Better names for these dimensions
-            cd1 = ConditionalDimension(name="cd_%s" % alloc(),
-                                       parent=kernel_dims[2],
-                                       condition=And(next_dims[2] - height +
-                                                     1 + kernel_dims[2] >= 0,
-                                                     next_dims[2] - height +
-                                                     1 + kernel_dims[2] <
-                                                     layer.result_gradients
-                                                     .shape[2]))
-            cd2 = ConditionalDimension(name="cd_%s" % alloc(),
-                                       parent=kernel_dims[3],
-                                       condition=And(next_dims[3] - width + 1 +
-                                                     kernel_dims[3] >= 0,
-                                                     next_dims[3] - width + 1 +
-                                                     kernel_dims[3] <
-                                                     layer.result_gradients
-                                                     .shape[3]))
+            eqs = [Eq(next_layer._RG[dims], self.result_gradients[dims])]
+            return (eqs, [])
 
-            eqs += [Inc(next_layer.result_gradients[next_dims[0],
-                                                    next_dims[1],
-                                                    next_dims[2],
-                                                    next_dims[3]],
-                        layer.kernel[dims[1], next_dims[1],
-                                     height - kernel_dims[2] - 1,
-                                     width - kernel_dims[3] - 1] *
-                        layer.result_gradients[next_dims[0],
-                                               dims[1],
-                                               next_dims[2] - height + 1 +
-                                               kernel_dims[2],
-                                               next_dims[3] - width + 1 +
-                                               kernel_dims[3]],
-                        implicit_dims=(cd1, cd2))] + \
-                next_layer.activation.backprop_eqs(next_layer)
-
-        return (eqs, [])
 
 
 class InstanceNorm(Layer):
@@ -982,7 +940,9 @@ class InstanceNorm(Layer):
         # Internal kernel size (self._kernel_size) is expressed as
         # (output channels / kernel count, input channels, rows, columns).
         self._dims = dimensions
-
+        self.mean = None
+        self.var = None
+        self.epsilon = 0.00001
         self._error_check(input_size)
 
         super().__init__(None, input_size, activation,
@@ -1028,19 +988,6 @@ class InstanceNorm(Layer):
             input_size[1],), dimensions=bias_dimensions, space_order=0,
             dtype=np.float64)
 
-        # function for kernel
-        kernel_dims = [SpaceDimension("kernel_"+x)
-                       for x in dimensions]
-
-        kernel_func = Function(name=("Kernel_F"), shape=(kernel_size),
-                               dimensions=(kernel_dims), space_order=0,
-                               dtype=np.float64)
-        
-        kernel_grad_dimensions = [SpaceDimension(("kernel_grad"+x))
-                                  for x in dimensions]
-        kernel_grad = Function(name=("kgrad_"), shape=(
-            kernel_size), dimensions=kernel_grad_dimensions, space_order=0,
-            dtype=np.float64) 
         output_grad_dimensions = [SpaceDimension(
             "output_grad"+x) for x in dimensions]
 
@@ -1054,7 +1001,7 @@ class InstanceNorm(Layer):
             input_size[1],), dimensions=bias_grad_dimensions, space_order=0,
             dtype=np.float64)
 
-        return (kernel_func, input_func, result_func, bias, kernel_grad,
+        return (None, input_func, result_func, bias, None,
                 output_grad, bias_grad)
 
     def execute(self, input_data) -> np.array:
@@ -1077,45 +1024,45 @@ class InstanceNorm(Layer):
 
         # indices of kernel matrix for convolution
         k_indices = product(* k_dims_offsets)
-        # for i in k_indices:
-        #     print(i)
+
+        # sum = Function(name="mean_sum",
+        #                space_order=0, shape=result_shape,
+        #                dimensions=result_dimensions)
+        # mean = [sum[(*result_dimensions[:2], *x)] for x in k_indices]
+        
         temp_func = Function(name="Ones_Filter", shape=result_shape,
                              dimensions=result_dimensions, space_order=0,
                              dtype=np.float64)
 
+        k_indices = product(* k_dims_offsets)
         # indices of input based on resullt matrix for convolution
         r_indicies = product(*k_dims_offsets)
-        # for i in k_indices:
-        #     print
+
         temp_func.data[:] = 1
         weight_matrix = sp.Matrix(
             [temp_func[(*result_dimensions[:2], *x)] for x in k_indices])
-        # print("weight_matrix")
-        # for i in weight_matrix:
-        #     print(i)
-        s = dv.types.Symbol(name='sum', dtype=dtype)dv.Operator([dv.Eq(s, 0.0)], [dv.Inc(s, f[:3])])
+
         r_indices_matrix = sp.Matrix(
             [self._I[(*result_dimensions[:2], *x)] for x in r_indicies])
         N = np.prod(result_shape[2:])
-        # print("r_indices_matrix")
-        # print(r_indices_matrix)
+
         # stencil operation corresponding to the convolution with kernel of input_shape with value to simulate sum of input_mat
         sum_input_sten = weight_matrix.dot(r_indices_matrix)
 
-        mean = (sum_input_sten/N)
+        self.mean = (sum_input_sten/N)
         '''
         .. math::
         y = \frac{x - \mathrm{E}[x]}{ \sqrt{\mathrm{Var}[x] + \epsilon}} 
         '''
         
         # deviation from mean
-        eqs = [Eq(self._R[result_dimensions], self._I[result_dimensions] - mean)]
+        eqs = [Eq(self._R[result_dimensions], self._I[result_dimensions] - self.mean)]
         r_indicies = product(*k_dims_offsets)
         r_indices_matrix = sp.Matrix(
             [self._R[(*result_dimensions[0:2], *x)]**2 for x in r_indicies])
 
         sum_var_stencil = r_indices_matrix.dot(weight_matrix)
-
+        self.var = sp.sqrt(sum_var_stencil/N+self.epsilon)
         eqs += [Eq(self._I[result_dimensions], sum_var_stencil/N)]
         epsilon = 0.00001
         eqs += [Eq(self._R[result_dimensions], self._R[result_dimensions] /
@@ -1129,62 +1076,53 @@ class InstanceNorm(Layer):
         return (eqs, [])
 
     def backprop_equations(self, prev_layer, next_layer):
-        layer = self
 
-        kernel_dims = layer.kernel_gradients.dimensions
-        bias_dims = layer.bias_gradients.dimensions
-        dims = layer.result_gradients.dimensions
+        result_dimensions = self._R.dimensions
+        result_shape = self._R.shape
+        var_g = None
+        mean_g = None
+        k_dims_offsets = []
+        for i in range(0, self._dims):
+            k_dims_offsets.append(
+                list(range(0, result_shape[-self._dims + i])))
 
-        eqs = [Inc(layer.bias_gradients[bias_dims[0]],
-                   layer.result_gradients[dims[0], dims[1], dims[2], dims[3]]),
-               Inc(layer.kernel_gradients[kernel_dims[0], kernel_dims[1],
-                                          kernel_dims[2], kernel_dims[3]],
-                   layer.result_gradients[dims[0],
-                                          kernel_dims[0], dims[2],
-                                          dims[3]] *
-                   layer.input[dims[0], kernel_dims[1],
-                               kernel_dims[2] + dims[2],
-                               kernel_dims[3] + dims[3]])]
 
-        _, _, height, width = layer.kernel.shape
+        # indices of kernel matrix for convolution
+        k_indices = product(* k_dims_offsets)
 
+        # sum = Function(name="mean_sum",
+        #                space_order=0, shape=result_shape,
+        #                dimensions=result_dimensions)
+        # mean = [sum[(*result_dimensions[:2], *x)] for x in k_indices]
+        
+        temp_func = Function(name="Ones_Filter", shape=result_shape,
+                             dimensions=result_dimensions, space_order=0,
+                             dtype=np.float64)
+
+        k_indices = product(* k_dims_offsets)
+        # indices of input based on resullt matrix for convolution
+        r_indicies = product(*k_dims_offsets)
+
+        temp_func.data[:] = 1
+        weight_matrix = sp.Matrix(
+            [temp_func[(*result_dimensions[:2], *x)] for x in k_indices])
+
+        r_indices_matrix = sp.Matrix(
+            [self._I[(*result_dimensions[:2], *x)] for x in r_indicies])
+        N = np.prod(result_shape[2:])
+        sum_input_sten = weight_matrix.dot(r_indices_matrix)
+
+        mean_g = (sum_input_sten/(N*self.var))
+        double = 2
         if next_layer is not None:
-            next_dims = next_layer.result_gradients.dimensions
-            # TODO: Better names for these dimensions
-            cd1 = ConditionalDimension(name="cd_%s" % alloc(),
-                                       parent=kernel_dims[2],
-                                       condition=And(next_dims[2] - height +
-                                                     1 + kernel_dims[2] >= 0,
-                                                     next_dims[2] - height +
-                                                     1 + kernel_dims[2] <
-                                                     layer.result_gradients
-                                                     .shape[2]))
-            cd2 = ConditionalDimension(name="cd_%s" % alloc(),
-                                       parent=kernel_dims[3],
-                                       condition=And(next_dims[3] - width + 1 +
-                                                     kernel_dims[3] >= 0,
-                                                     next_dims[3] - width + 1 +
-                                                     kernel_dims[3] <
-                                                     layer.result_gradients
-                                                     .shape[3]))
-
-            eqs += [Inc(next_layer.result_gradients[next_dims[0],
-                                                    next_dims[1],
-                                                    next_dims[2],
-                                                    next_dims[3]],
-                        layer.kernel[dims[1], next_dims[1],
-                                     height - kernel_dims[2] - 1,
-                                     width - kernel_dims[3] - 1] *
-                        layer.result_gradients[next_dims[0],
-                                               dims[1],
-                                               next_dims[2] - height + 1 +
-                                               kernel_dims[2],
-                                               next_dims[3] - width + 1 +
-                                               kernel_dims[3]],
-                        implicit_dims=(cd1, cd2))] + \
-                next_layer.activation.backprop_eqs(next_layer)
-
-        return (eqs, [])
+            eqs = [Eq(self.result_gradients[result_dimensions], self.result_gradients[result_dimensions]/self.var)]
+            eqs.append([Eq(var_g, self.result_gradients[result_dimensions]*(self._R[result_dimensions-self.mean])/(self.var*sp.sqrt(self.var)*double))])
+            eqs.append([Eq(var_g[result_dimensions], var_g[result_dimensions]*(2*(self._R[result_dimensions]-self.mean)/N))])
+            eqs.append([Inc(self.result_gradients[result_dimensions], var_g[result_dimensions])])
+            eqs.append([Inc(mean_g[result_dimensions], var_g[result_dimensions]*(-2*self.mean())/N)])
+            eqs.append([Inc(self.result_gradients[result_dimensions], mean_g[result_dimensions]/N)])
+            eqs.append([Eq(next_layer.result_gradients[result_dimensions], self.result_gradients[result_dimensions])])
+            return (eqs, [])
 
 
 class InstanceNorm3D(InstanceNorm):
@@ -1281,3 +1219,142 @@ class InstanceNorm2D(InstanceNorm):
         super().__init__(input_size, dimensions,
                          activation, generate_code,
                          strict_stride_check)
+
+
+class add(Layer):
+    def __init__(self, input_size,  layer=None, activation=None,
+                 name_allocator_func=alloc,
+                 dim_allocator_func=dim_alloc,
+                 generate_code=False):
+        self.layer = layer
+        super().__init__(None, input_size, activation,
+                         name_allocator_func, dim_allocator_func,
+                         generate_code)
+    def _allocate(self, kernel_size, input_size, name_allocator_func,
+                  dim_allocator_func):
+
+
+        self.dim_dict = dim_dict = {3: 'depth', 2: 'height', 1: 'width'}
+
+        dimensions = ['dbatch', 'dchannel', 'depth', 'height', 'width']
+        result_shape = []
+        input_size = list(input_size)
+
+
+        result_shape = input_size
+
+        # input data function
+        input_dimensions = [SpaceDimension("Input_"+x) for x in dimensions]
+
+        input_func = Function(name="Input_F", shape=(input_size),
+                              dimensions=input_dimensions, space_order=0,
+                              dtype=np.float64)
+
+
+        # Result function
+        result_dimensions = [SpaceDimension(
+            ("Result_"+x)) for x in dimensions]
+
+        result_func = Function(name="Result_F", shape=(result_shape),
+                               dimensions=result_dimensions, space_order=0,
+                               dtype=np.float64)
+
+        output_grad_dimensions = [SpaceDimension(("output_grad"+x)) for x in dimensions]
+
+        output_grad = Function(name=("out_grad_"),
+                               shape=result_shape,
+                               dimensions=output_grad_dimensions,
+                               space_order=0, dtype=np.float64)
+
+
+
+        return (None, input_func, result_func, None, None,
+                output_grad, None)
+    
+    def execute(self, input_data) -> np.array:
+        self._I.data[:] = input_data
+
+        return super().execute()
+
+    def equations(self):
+        dims = self._I.dimensions
+        # eqs = [Inc(self._I[dims], self._R[dims])]
+        self._R = self.layer._R
+        # eqs = [Eq(self._R[dims], self.layer.result[dims])]
+        eqs = [Inc(self._R[dims], self._I[dims])]
+
+        return (eqs, [])
+    
+    def backprop_equations(self, prev_layer, next_layer):
+        if next_layer is not None:
+            eqs = [Eq(next_layer.result_gradients, self.result_gradients)]
+            return (eqs, [])
+
+class cat(Layer):
+    def __init__(self, input_size,  layer=None, activation=None,
+                 name_allocator_func=alloc,
+                 dim_allocator_func=dim_alloc,
+                 generate_code=False):
+        self.layer = layer
+        super().__init__(None, input_size, activation,
+                         name_allocator_func, dim_allocator_func,
+                         generate_code)
+    def _allocate(self, kernel_size, input_size, name_allocator_func,
+                  dim_allocator_func):
+
+
+        self.dim_dict = dim_dict = {3: 'depth', 2: 'height', 1: 'width'}
+
+        dimensions = ['dbatch', 'dchannel', 'depth', 'height', 'width']
+        result_shape = []
+        input_size = list(input_size)
+
+        result_shape = [input_size[0], input_size[1]*2, input_size[2], input_size[3], input_size[4]]
+
+        # input data function
+        input_dimensions = [SpaceDimension("Input_"+x) for x in dimensions]
+
+        input_func = Function(name="Input_F", shape=(input_size),
+                              dimensions=input_dimensions, space_order=0,
+                              dtype=np.float64)
+
+
+        # Result function
+        result_dimensions = [SpaceDimension(
+            ("Result_"+x)) for x in dimensions]
+
+        result_func = Function(name="Result_F", shape=(result_shape),
+                               dimensions=result_dimensions, space_order=0,
+                               dtype=np.float64)
+
+        output_grad_dimensions = [SpaceDimension(("output_grad"+x)) for x in dimensions]
+
+        output_grad = Function(name=("out_grad_"),
+                               shape=result_shape,
+                               dimensions=output_grad_dimensions,
+                               space_order=0, dtype=np.float64)
+
+
+
+        return (None, input_func, result_func, None, None,
+                output_grad, None)
+    
+    def execute(self, input_data) -> np.array:
+        self._I.data[:] = input_data
+        self._R.data[:] = 0
+        return super().execute()
+
+    def equations(self):
+        dims = self._I.dimensions
+
+        cat_dims = self.layer._R.dimensions
+        self._R = self.layer._R
+
+        eqs = [Inc(self._R[(cat_dims[0],dims[1]+cat_dims[1],*cat_dims[2:])],self._I[dims])]
+
+        return (eqs, [])
+    
+    def backprop_equations(self, prev_layer, next_layer):
+        if next_layer is not None:
+            eqs = [Eq(next_layer.result_gradients, self.result_gradients)]
+            return (eqs, [])
