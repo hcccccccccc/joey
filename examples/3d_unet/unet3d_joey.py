@@ -8,9 +8,8 @@ import joey
 
 def CB(input_size, kernel_size, stride=(1,1,1), padding=(1,1,1)):
     conv = joey.Conv3D(kernel_size=kernel_size, input_size=input_size, stride=stride, padding=padding, activation=joey.activation.LeakyReLU(),strict_stride_check=False)
-    # inst = joey.InstanceNorm3D(input_size=input_size)
-
-    CB = [conv]
+    inst = joey.InstanceNorm3D(input_size=input_size)
+    CB = [conv, inst]
     return CB
 
 def C3(input_size, kernel_size=(3,1,1,1)):
@@ -23,8 +22,8 @@ def DB(input_size, kernel_size, stride=(1,1,1)):
     temp_size = (input_size[0], kernel_size[1], input_size[2],input_size[3], input_size[4])
     CB2 = CB(input_size=temp_size, kernel_size=kernel_size)
     CB3 = CB(input_size=temp_size, kernel_size=kernel_size)
-    connect = joey.add(input_size=temp_size, layer=CB1[-1])
-    DB = CB1 + CB2 + CB3 + [connect]
+    # connect = joey.add(input_size=temp_size, layer=CB1[-1])
+    DB = CB1 + CB2 + CB3 
     return DB
 
 def UB_U3_CB(input_size, kernel_size):
@@ -58,23 +57,23 @@ def unet_joey(batch_size, in_channel, depth, height, weight, filter):
     DB_part = DB1 + DB2 + DB3 + DB4 + DB5
 
         # Upward Block
-    # UB1_U3_CB = UB_U3_CB(input_size=(batch_size, filter*16, depth/8, height/8, weight/8), kernel_size=(filter*8,3,3,3))
-    # UB1_CB_CB = UB_CB_CB(input_size=(batch_size, filter*16, depth/8, height/8, weight/8), kernel_size=(filter*8,1,1,1))
-    # UB2_U3_CB = UB_U3_CB(input_size=(batch_size, filter*8, depth/4, height/4, weight/4), kernel_size=(filter*4,3,3,3))
-    # UB2_CB_CB = UB_CB_CB(input_size=(batch_size, filter*8, depth/4, height/4, weight/4), kernel_size=(filter*4,1,1,1))
-    # UB3_U3_CB = UB_U3_CB(input_size=(batch_size, filter*4, depth/2, height/2, weight/2), kernel_size=(filter*2,3,3,3))
-    # UB3_CB_CB = UB_CB_CB(input_size=(batch_size, filter*4, depth/2, height/2, weight/2), kernel_size=(filter*2,3,3,3))
-    # UB4_U3_CB = UB_U3_CB(input_size=(batch_size, filter*2, depth, height, weight), kernel_size=(filter,3,3,3))
-    # UB4_CB_CB = UB_CB_CB(input_size=(batch_size, filter*2, depth, height, weight), kernel_size=(filter,3,3,3))
-    # # C3_1 = C3(input_size=(batch_size, filter*4, depth/4, height/4, weight/4), kernel_size=(3,1,1,1))
-    # # C3_2 = C3(input_size=(batch_size, filter*2, depth/2, height/2, weight/2), kernel_size=(3,1,1,1))
-    # # C3_3 = C3(input_size=(batch_size, filter, depth, height, weight),kernel_size=(3,1,1,1))
-    # # U3_1 = joey.UpSample(input_size=(batch_size, 3, depth/4, height/4, weight/4), scale_factor=2)
-    # # U3_2 = joey.UpSample(input_size=(batch_size, 3, depth/2, height/2, weight/2),scale_factor=2)
-    # # sigmoid = nn.Sigmoid()
-    # UB_part = UB1_U3_CB + UB1_CB_CB + UB2_U3_CB + UB2_CB_CB + UB3_U3_CB + UB3_CB_CB + UB4_U3_CB + UB4_CB_CB
-    # # + C3_1 + C3_2 + C3_3 + [U3_1] + [U3_2]
-    unet = DB_part
+    UB1_U3_CB = UB_U3_CB(input_size=(batch_size, filter*16, depth/8, height/8, weight/8), kernel_size=(filter*8,3,3,3))
+    UB1_CB_CB = UB_CB_CB(input_size=(batch_size, filter*16, depth/8, height/8, weight/8), kernel_size=(filter*8,1,1,1))
+    UB2_U3_CB = UB_U3_CB(input_size=(batch_size, filter*8, depth/4, height/4, weight/4), kernel_size=(filter*4,3,3,3))
+    UB2_CB_CB = UB_CB_CB(input_size=(batch_size, filter*8, depth/4, height/4, weight/4), kernel_size=(filter*4,1,1,1))
+    UB3_U3_CB = UB_U3_CB(input_size=(batch_size, filter*4, depth/2, height/2, weight/2), kernel_size=(filter*2,3,3,3))
+    UB3_CB_CB = UB_CB_CB(input_size=(batch_size, filter*4, depth/2, height/2, weight/2), kernel_size=(filter*2,3,3,3))
+    UB4_U3_CB = UB_U3_CB(input_size=(batch_size, filter*2, depth, height, weight), kernel_size=(filter,3,3,3))
+    UB4_CB_CB = UB_CB_CB(input_size=(batch_size, filter*2, depth, height, weight), kernel_size=(filter,3,3,3))
+    # C3_1 = C3(input_size=(batch_size, filter*4, depth/4, height/4, weight/4), kernel_size=(3,1,1,1))
+    # C3_2 = C3(input_size=(batch_size, filter*2, depth/2, height/2, weight/2), kernel_size=(3,1,1,1))
+    # C3_3 = C3(input_size=(batch_size, filter, depth, height, weight),kernel_size=(3,1,1,1))
+    # U3_1 = joey.UpSample(input_size=(batch_size, 3, depth/4, height/4, weight/4), scale_factor=2)
+    # U3_2 = joey.UpSample(input_size=(batch_size, 3, depth/2, height/2, weight/2),scale_factor=2)
+    # sigmoid = nn.Sigmoid()
+    UB_part = UB1_U3_CB + UB1_CB_CB + UB2_U3_CB + UB2_CB_CB + UB3_U3_CB + UB3_CB_CB + UB4_U3_CB + UB4_CB_CB
+    # + C3_1 + C3_2 + C3_3 + [U3_1] + [U3_2]
+    unet = DB_part + UB_part
 
     return(joey.Net(unet), unet)
 
@@ -231,7 +230,7 @@ def create_unet3d(batch_size=2, filter=8):
 
 size = (1,1,1,32,32)
 model, net = unet_joey(2,4,16,16,16, 8)
-print(net)
+print(model)
 
 # input = torch.rand(size)
 # print(input)
