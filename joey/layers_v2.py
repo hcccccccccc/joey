@@ -887,7 +887,7 @@ class UpSample(Layer):
         dims = self._R.dimensions
 
         if next_layer is not None:
-            eqs = [Eq(next_layer._RG[dims], self.result_gradients[dims]/self._scale_factor)]
+            eqs = [Eq(next_layer._RG[dims], self.result_gradients[dims])]
             return (eqs, [])
 
 

@@ -23,13 +23,15 @@ def unet_joey(batch_size, in_channel, depth, height, weight, filter):
 # print(layer)
 
 
-size = (1,2,1,1,2)
+size = (4,8,64,64,64)
 input = torch.rand(size)
-print(input)
+# print(input)
 inst = joey.InstanceNorm3D(input_size=(size), generate_code=True)
 cat = joey.cat(input_size=(size), layer=inst, generate_code=True)
 out1 = inst.execute(input)
-print(out1)
+# print(out1)
 out2 = cat.execute(input)
-print(out2)
+# print(out2)
+out3 = torch.cat([input, torch.tensor(out1)], dim=1)
+print(out3-out2)
 
