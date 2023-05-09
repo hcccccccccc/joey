@@ -61,10 +61,11 @@ class dataset(Dataset):
 
 
 class BratsDataset(Dataset):
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, data_size, model_version):
         self.data_dir = data_dir
         self.subjects = os.listdir(data_dir)
-
+        self.data_size = data_size
+        self.model_version = model_version
         self.transform = BratsTransform()
 
     def __len__(self):
@@ -72,9 +73,7 @@ class BratsDataset(Dataset):
 
     def __getitem__(self, idx):
         subject_dir = os.path.join(self.data_dir, self.subjects[idx])
-        # print(subject_dir)
-        # file = os.listdir(subject_dir)
-        # print(len(file))
+
         f_t1 = glob.glob(os.path.join(subject_dir, '*_t1.nii'))
         f_t1ce = glob.glob(os.path.join(subject_dir, '*_t1ce.nii'))
         f_t2 = glob.glob(os.path.join(subject_dir, '*_t2.nii'))
@@ -101,7 +100,7 @@ class BratsDataset(Dataset):
         label = sitk.GetArrayFromImage(seg_img)
 
         # Apply data augmentation
-        image, label = self.transform((image, label))
+        image, label = self.transform((image, label), self.data_size, self.model_version)
 
         # Convert numpy arrays to PyTorch tensors
         image = torch.from_numpy(image).float()
@@ -112,16 +111,27 @@ class BratsDataset(Dataset):
 
 
 class BratsTransform:
-    def __call__(self, sample):
+    def __call__(self, sample, size, model):
         image, label = sample
 
         image[image < 0] = 0
         label = self.convert_seg_to_one_hot(label)
         label = torch.squeeze(label)
-        # Crop image and label to 128x128x128
-        image = image[:, :, 16:144, 56:184, 56:184]
-        label = label[:, 16:144, 56:184, 56:184]
+        start = []
+        start.append(int((label.shape[1]-size)/2))
+        start.append(int((label.shape[2]-size)/2))
+        if model == 'joey':
+            image = image[:,:,start[0]:start[0]+size,start[1]:start[1]+size,start[1]:start[1]+size]
+            label = label[:,start[0]:start[0]+size+2,start[1]:start[1]+size+2,start[1]:start[1]+size+2]
+        else:
+            image = image[:,:,start[0]:start[0]+size,start[1]:start[1]+size,start[1]:start[1]+size]
+            label = label[:,start[0]:start[0]+size,start[1]:start[1]+size,start[1]:start[1]+size]
         
+
+        # Crop image and label to 128x128x128
+        # image = image[:, :, 16:144, 56:184, 56:184]
+        # label = label[:, 14:144, 56:186, 56:186]
+
         # image = image.astype(np.float32)
         # label = label.astype(np.float32)
 

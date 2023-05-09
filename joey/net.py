@@ -199,8 +199,8 @@ class Net:
         """
 
         self._layers[-1].result_gradients.data[:] = \
-            np.transpose(np.array(loss_gradient_func(self._layers[-1],
-                                                     expected)))
+            np.array(loss_gradient_func(self._layers[-1],
+                                                     expected))
         self._backward_operator.apply(**self._backward_arg_dict)
 
         if pytorch_optimizer is not None:

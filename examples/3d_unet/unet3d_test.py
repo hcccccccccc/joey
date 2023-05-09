@@ -61,7 +61,6 @@ class test_pytorch(nn.Module):
     
     def DB(self, in_channel, filter, stride=(1,1,1)):
         return nn.Sequential(self.CB(in_channel, filter, stride),
-                             nn.Dropout3d(),
                              self.CB(filter, filter))
     
     def U3(self):
@@ -123,19 +122,19 @@ class test_pytorch(nn.Module):
         out = torch.cat([out, DB3], dim=1)
         out = self.UB2_CB_CB(out)
 
-        #upscale 1
-        upscale1 = self.C3_1(out)
-        upscale1 = self.U3_1(upscale1)
+        # #upscale 1
+        # upscale1 = self.C3_1(out)
+        # upscale1 = self.U3_1(upscale1)
 
         #Level 3 UP(32)
         out = self.UB3_U3_CB(out)
         out = torch.cat([out, DB2], dim=1)
         out = self.UB3_CB_CB(out)
 
-        #upscale 2
-        upscale2 = self.C3_2(out)
-        upscale2 += upscale1
-        upscale2 = self.U3_2(upscale2) 
+        # #upscale 2
+        # upscale2 = self.C3_2(out)
+        # upscale2 += upscale1
+        # upscale2 = self.U3_2(upscale2) 
 
         #Level 4 UP(16)
         out = self.UB4_U3_CB(out)
@@ -144,7 +143,7 @@ class test_pytorch(nn.Module):
         
         #upscale 3
         out = self.C3_3(out)
-        out += upscale2
+        # out += upscale2
 
         #activation
         out = self.sigmoid(out)
@@ -152,7 +151,7 @@ class test_pytorch(nn.Module):
         return out
 
 def train(net, device, data_root, epochs=40, batch_size=4, lr=5e-4):
-    barts2019 = barts2019loader.BratsDataset(data_root)
+    barts2019 = barts2019loader.BratsDataset(data_root, 32, 'pytorch')
     # print(len(barts2019))
     train_idx, val_idx = train_test_split(list(range(len(barts2019))), test_size=0.2, random_state=42)
     train_dataset = data.Subset(barts2019, train_idx)

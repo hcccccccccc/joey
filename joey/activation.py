@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from sympy import Max, sign, Min
+from sympy import Max, sign, Min, exp
 from devito import Eq
 
 
@@ -41,7 +41,7 @@ class ReLU(Activation):
     """An Activation subclass corresponding to ReLU."""
 
     def __init__(self):
-        super().__init__(lambda x: Max(0, x))
+        super().__init__(self.relu)
 
     def backprop_eqs(self, layer):
         dims = layer.result_gradients.dimensions
@@ -49,13 +49,16 @@ class ReLU(Activation):
                    layer.result_gradients[dims]
                    * Max(0, sign(layer.result[dims])))]
 
+    def relu(self, x):
+        return Max(0, x)
+
 
 class LeakyReLU(Activation):
     """An Activation subclass corresponding to ReLU."""
     def __init__(self, negative_slope=0.01):
         self.negative_slope = negative_slope
         
-        super().__init__(lambda x: Max(0,x) + Min(0, x*negative_slope))
+        super().__init__(self.leakyrelu)
 
     def backprop_eqs(self, layer):
         dims = layer.result_gradients.dimensions
@@ -64,13 +67,32 @@ class LeakyReLU(Activation):
                    * (Max(0, sign(layer.result[dims])
                       + Min(0, sign(layer.result[dims]
                                     * self.negative_slope)))))]
+    
+    def leakyrelu(self, x):
+        return Max(0,x) + Min(0, x*self.negative_slope)
 
+
+class Sigmoid(Activation):
+    """An Activation subclass corresponding to ReLU."""
+    def __init__(self):
+        super().__init__(self.sigmoid)
+
+    def backprop_eqs(self, layer):
+        dims = layer.result_gradients.dimensions
+        return [Eq(layer.result_gradients[dims],
+                   layer.result_gradients[dims]*(1-layer.result[dims])*layer.result[dims])]
+
+    def sigmoid(self, x):
+        return 1/(1+exp(x))
 
 class Dummy(Activation):
     """An Activation subclass corresponding to f(x) = x."""
 
     def __init__(self):
-        super().__init__(lambda x: x)
+        super().__init__(self.dummy)
 
     def backprop_eqs(self, layer):
         return []
+
+    def dummy(self, x):
+        return x
