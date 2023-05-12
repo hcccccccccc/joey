@@ -1,19 +1,10 @@
-from itertools import product
-import numpy as np
 import os
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.data as data
-import torchvision
-import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
-from torch.autograd import Variable
 from sklearn.model_selection import train_test_split
 
-import matplotlib.pyplot as plt
-import barts2019loader
-import diceloss
 
 class test_pytorch(nn.Module):
     def __init__(self, in_channel = 4, filter = 16):
@@ -149,89 +140,3 @@ class test_pytorch(nn.Module):
         out = self.sigmoid(out)
 
         return out
-
-def train(net, device, data_root, epochs=40, batch_size=4, lr=5e-4):
-    barts2019 = barts2019loader.BratsDataset(data_root, 32, 'pytorch')
-    # print(len(barts2019))
-    train_idx, val_idx = train_test_split(list(range(len(barts2019))), test_size=0.2, random_state=42)
-    train_dataset = data.Subset(barts2019, train_idx)
-    val_dataset = data.Subset(barts2019, val_idx)
-    train_loader = data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    val_loader = data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
-    criterion=diceloss.WeightedMulticlassDiceLoss(num_classes=3, class_weights=[0.5,0.3,0.2])
-    total_loss = []
-    ET_loss = []
-    TC_loss = []
-    WT_loss = []
-
-    for epoch in range(epochs):
-        train_loss = 0
-        train_acc = 0
-        tc_dice = 0
-        wt_dice = 0
-        et_dice = 0
-        print('EPOCH: {}'.format(epoch+1))
-        net.train()
-
-        for batch, (image, label) in enumerate(train_loader):
-            print('\rprocess {:.2%}'.format(batch/len(train_loader)), end='')
-            image = torch.stack(image, dim=1)
-            image = image.to(device=device, dtype=torch.float32)
-            label = label.to(device=device, dtype=torch.float32)
-
-            label_pred = net(image)
-
-            pil_img = TF.to_pil_image(label[0][0][64].float())
-            pil_img.save("label.png", format="PNG")
-            pil_img = TF.to_pil_image(label_pred[0][0][64].float())
-            pil_img.save("label_pred.png", format="PNG")
-
-            loss, et, tc, wt = criterion(label_pred,label)
-            optimizer.zero_grad()
-            loss.backward()
-            train_loss += loss.item()
-            et_dice += et.item()
-            tc_dice += tc.item()
-            wt_dice += wt.item()
-
-            # pred = label_pred.argmax(dim=1)
-            # train_acc += (pred == label).sum()
-            optimizer.step()
-            # print('train loss : {:.6f}'.format(train_loss))
-        
-        total_loss.append(train_loss/len(train_loader))
-        ET_loss.append(et_dice/len(train_loader))
-        TC_loss.append(tc_dice/len(train_loader))
-        WT_loss.append(wt_dice/len(train_loader))
-        print('\rSummary: Epoch {} | total loss {:.6f} || ET loss {:.6f} | TC loss {:.6f} | WT loss {:.6f}'.format(epoch+1, (train_loss / len(train_loader)), (et_dice / len(train_loader)), (tc_dice / len(train_loader)), (wt_dice / len(train_loader))), end='\n')
-
-        plt.clf()
-        plt.plot(range(0, epoch+1),total_loss, label='total loss')
-        plt.plot(range(0,epoch+1), ET_loss, label='ET loss')
-        plt.plot(range(0,epoch+1), TC_loss, label='TC loss')
-        plt.plot(range(0,epoch+1), WT_loss, label='WT loss')
-        plt.legend()
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss')
-        plt.savefig('loss.png')
-
-
-if __name__ == "__main__": 
-    torch.cuda.empty_cache()
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # print(torch.cuda.device_count())
-    # print(torch.cuda.get_device_name(0))
-    # print(device)
-    # print(torch.cuda.is_available())
-    MAX_EPOCH = 200
-    data_root = '/run/datasets/MICCAI_BraTS_2019_Data_Training'
-    batch_size= 2
-    lr = 5e-4
-    net = test_pytorch(in_channel = 4, filter = 16)
-    if torch.cuda.is_available():
-        net.cuda()
-    train(net, device, data_root, MAX_EPOCH, batch_size, lr)
-    # m = test_pytorch(in_channel = 4, filter = 16)
-    # summary(m, input_size=(16,4,128,128,128), batch_size=4, device='cuda')

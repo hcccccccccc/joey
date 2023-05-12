@@ -1,26 +1,19 @@
-from itertools import product
-import numpy as np
-import cupy as cp
 import os
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import joey
 import time
 import torch.optim as optim
 from torch.utils.data import DataLoader, Subset
 from torchsummary import summary
-from apex import amp
 import time
 import multiprocessing
 import gc
-
 import matplotlib.pyplot as plt
 import barts2019loader
 import diceloss
-import unet3d_test
-from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
+
+
 def CB(input_size, kernel_size, stride=(1,1,1), padding=(1,1,1)):
     conv = joey.Conv3D(kernel_size=kernel_size, input_size=input_size, stride=stride, padding=padding,strict_stride_check=False)
     temp_size = (input_size[0], kernel_size[0], input_size[2],input_size[3], input_size[4])
@@ -88,12 +81,6 @@ def train(net, inputs, targets, criterion, pytorch_optimizer, device):
         pred = layer.result.data
 
         target = target.numpy()
-        # result = pred
-        # for b in range(target.shape[0]):
-        #     for c in range(target.shape[1]):
-        #         intersection = (pred[b,c,:,:,:] * target[b,c,:,:,:]).sum()
-        #         union =(pred[b,c,:,:,:] + target[b,c,:,:,:]).sum()
-        #         result[b,c,:,:,:] = 2*(intersection-target[b,c,:,:,:]*union)/(union**2)
         result = 1- 2*((pred*target+eps)/(pred+target+eps))
         return result
 
@@ -111,10 +98,10 @@ if __name__ == "__main__":
     # envs, args
     os.environ["CUDA_VISIBLE_DEVICES"]="-1"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_epochs = 10
+    num_epochs = 1
     data_root = '/run/datasets/MICCAI_BraTS_2019_Data_Training' 
     batch_size = 2
-    workers = 4
+    workers = 8
     image_size = 64
     channel_size = 4
     lr = 5e-4

@@ -1,18 +1,14 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import DataLoader, Subset
 from torchsummary import summary
-from apex import amp
 import time
 import os
-
 import matplotlib.pyplot as plt
 import barts2019loader
 import diceloss
 import unet3d_test
-from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
+
 
 class Trainer:
     def __init__(self, model, train_dataset, val_dataset, batch_size, num_epochs, optimizer, criterion):
@@ -29,8 +25,8 @@ class Trainer:
         
     def train(self):
         # print("memory used: {}".format(torch.cuda.memory_allocated(0)))
-        train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8)
-        val_loader = DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=8)
+        train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=2)
+        val_loader = DataLoader(self.val_dataset, batch_size=self.batch_size, num_workers=2)
         total_train_loss = []
         total_val_loss = []
         total_val_acc = []
@@ -50,8 +46,6 @@ class Trainer:
                 self.optimizer.zero_grad()
                 outputs = self.model(inputs)
                 loss, et, tc, wt = self.criterion(outputs, targets)
-                # with amp.scale_loss(loss, optimizer) as scaled_loss:
-                #     scaled_loss.backward()
                 loss.backward()
                 self.optimizer.step()
                 train_loss += loss.item() * inputs.size(0)
@@ -106,13 +100,11 @@ class Trainer:
 
 if __name__ == "__main__": 
     os.environ["CUDA_VISIBLE_DEVICES"]="-1"
-    # os.environ["OMP_NUM_THREADS"]="1"
-    # torch.set_num_threads(1)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_epochs = 25
+    num_epochs = 5
     data_root = '/run/datasets/MICCAI_BraTS_2019_Data_Training' 
     batch_size = 2
-    data_size = 32
+    data_size = 128
 
     # dataset, dataloader
     barts2019 = barts2019loader.BratsDataset(data_root, data_size, 'pytorch')
@@ -124,8 +116,8 @@ if __name__ == "__main__":
     net = unet3d_test.test_pytorch(in_channel = 4, filter = 16)
     criterion=diceloss.WeightedMulticlassDiceLoss(num_classes=3, class_weights=[0.5,0.3,0.2])
     optimizer=torch.optim.Adam(net.parameters(), lr=5e-4)
-
     # summary(net, input_size=(4,128,128,128))
+
     #train
     trainer = Trainer(net, train_dataset, val_dataset, batch_size, num_epochs, optimizer, criterion)
     trainer.train()
